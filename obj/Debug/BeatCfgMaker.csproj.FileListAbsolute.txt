@@ -1,0 +1,17 @@
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.csproj.AssemblyReference.cache
+D:\WindowLearning\BeatCfgMaker\bin\Debug\BeatCfgMaker.exe.config
+D:\WindowLearning\BeatCfgMaker\bin\Debug\BeatCfgMaker.exe
+D:\WindowLearning\BeatCfgMaker\bin\Debug\BeatCfgMaker.pdb
+D:\WindowLearning\BeatCfgMaker\obj\Debug\MainWindow.g.cs
+D:\WindowLearning\BeatCfgMaker\obj\Debug\App.g.cs
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker_MarkupCompile.cache
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker_MarkupCompile.lref
+D:\WindowLearning\BeatCfgMaker\obj\Debug\MainWindow.baml
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.g.resources
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.Properties.Resources.resources
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.csproj.GenerateResource.cache
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.csproj.CoreCompileInputs.cache
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.exe
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.pdb
+D:\WindowLearning\BeatCfgMaker\obj\Debug\BeatCfgMaker.exe.config
+D:\WindowLearning\BeatCfgMaker\obj\Debug\GeneratedInternalTypeHelper.g.cs

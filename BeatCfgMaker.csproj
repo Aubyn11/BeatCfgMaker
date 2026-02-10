@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>BeatCfgMaker</AssemblyName>
+    <RootNamespace>BeatCfgMaker</RootNamespace>
+  </PropertyGroup>
+
+</Project>
