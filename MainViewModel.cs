@@ -265,13 +265,54 @@ namespace BeatCfgMaker
         }
 
         /// <summary>
-        /// 对所有节奏记录的时间戳进行跨节奏型对齐格式化。
-        /// 若不同节奏型中存在差值在容差范围内的时间节点，则统一替换为它们的平均值。
+        /// 计算单个节奏型内部相邻时间点的最短间隔（毫秒）。
+        /// 若时间点不足2个则返回 double.MaxValue。
         /// </summary>
-        /// <param name="toleranceMs">对齐容差（毫秒），默认200ms</param>
-        private void AlignTimestamps(double toleranceMs = 200.0)
+        private double GetMinInterval(BeatRecord record)
         {
-            // 收集所有时间戳（毫秒），并记录来源
+            if (record.Timestamps == null || record.Timestamps.Count < 2)
+                return double.MaxValue;
+
+            // 将时间点排序后计算相邻差值
+            var sorted = new System.Collections.Generic.List<double>();
+            foreach (var ts in record.Timestamps)
+                sorted.Add(ts.TotalMilliseconds);
+            sorted.Sort();
+
+            double minInterval = double.MaxValue;
+            for (int i = 1; i < sorted.Count; i++)
+            {
+                double diff = sorted[i] - sorted[i - 1];
+                if (diff < minInterval)
+                    minInterval = diff;
+            }
+            return minInterval;
+        }
+
+        /// <summary>
+        /// 对所有节奏记录的时间戳进行跨节奏型对齐格式化。
+        /// 容差 = 所有节奏型中最短输入时间间隔的最小值；
+        /// 两个跨节奏型时间点的差值 &lt; 容差时，统一替换为它们的平均值。
+        /// </summary>
+        private void AlignTimestamps()
+        {
+            if (BeatRecords == null || BeatRecords.Count < 2) return;
+
+            // 1. 计算每个节奏型的最短间隔，取全局最小值作为容差
+            double globalMinInterval = double.MaxValue;
+            foreach (var record in BeatRecords)
+            {
+                double minInterval = GetMinInterval(record);
+                if (minInterval < globalMinInterval)
+                    globalMinInterval = minInterval;
+            }
+
+            // 所有节奏型都只有1个时间点，无法计算间隔，跳过对齐
+            if (globalMinInterval == double.MaxValue) return;
+
+            double toleranceMs = globalMinInterval;
+
+            // 2. 收集所有时间戳（毫秒），并记录来源
             var allTimestamps = new System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>();
             for (int i = 0; i < BeatRecords.Count; i++)
             {
@@ -283,18 +324,17 @@ namespace BeatCfgMaker
                 }
             }
 
-            // 按时间排序，对相近的时间节点进行分组并取平均
+            // 3. 按时间排序，对相近的时间节点进行分组
             allTimestamps.Sort((a, b) => a.Ms.CompareTo(b.Ms));
 
-            // 分组：将差值在容差内的连续时间点归为同一组
             var groups = new System.Collections.Generic.List<System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>>();
             foreach (var ts in allTimestamps)
             {
                 bool added = false;
                 foreach (var group in groups)
                 {
-                    // 与组内最大值比较（已排序，最后一个最大）
-                    if (Math.Abs(ts.Ms - group[group.Count - 1].Ms) <= toleranceMs)
+                    // 与组内最大值比较（已排序，最后一个最大），差值 < 容差则归入同组
+                    if (ts.Ms - group[group.Count - 1].Ms < toleranceMs)
                     {
                         group.Add(ts);
                         added = true;
@@ -307,7 +347,7 @@ namespace BeatCfgMaker
                 }
             }
 
-            // 对每个分组，若包含来自不同节奏型的时间点，则统一为平均值
+            // 4. 对每个分组，若包含来自不同节奏型的时间点，则统一为平均值
             int alignedCount = 0;
             foreach (var group in groups)
             {
@@ -341,7 +381,7 @@ namespace BeatCfgMaker
 
             if (alignedCount > 0)
             {
-                MessageBox.Show($"已对齐 {alignedCount} 个跨节奏型的时间节点（容差：±{toleranceMs}ms）", "时间对齐", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"已对齐 {alignedCount} 个跨节奏型的时间节点（容差：< {Math.Round(toleranceMs)}ms，即最短输入间隔）", "时间对齐", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
