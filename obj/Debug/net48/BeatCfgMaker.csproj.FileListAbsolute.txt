@@ -18,3 +18,4 @@ D:\WindowLearning\BeatCfgMaker\obj\Debug\net48\BeatCfgMaker.csproj.CoreCompileIn
 D:\WindowLearning\BeatCfgMaker\obj\Debug\net48\BeatCfgMaker.exe
 D:\WindowLearning\BeatCfgMaker\obj\Debug\net48\BeatCfgMaker.pdb
 D:\WindowLearning\BeatCfgMaker\obj\Debug\net48\BeatCfgMaker.exe.config
+D:\WindowLearning\BeatCfgMaker\obj\Debug\net48\BeatCfgMaker.sourcelink.json

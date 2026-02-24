@@ -33,6 +33,11 @@ namespace BeatCfgMaker
                 viewModel.IsPlaying = false;
                 MessageBox.Show($"播放失败：{e.ErrorException?.Message}", "播放错误", MessageBoxButton.OK, MessageBoxImage.Error);
             };
+            AudioPlayer.MediaOpened += (s, e) => 
+            {
+                // 媒体真正开始播放时通知ViewModel
+                viewModel.OnMediaOpened();
+            };
             
             // 添加键盘事件监听
             this.KeyDown += OnKeyDown;

@@ -171,17 +171,27 @@ namespace BeatCfgMaker
                 PlayRequested?.Invoke(this, CurrentAudioFile);
                 IsPlaying = true;
                 
-                // 如果正在录制，设置开始时间
-                if (_isRecording)
+                // 点击播放时设置开始时间，确保节拍时间戳与音乐同步
+                if (_isRecording && _startTime == DateTime.MinValue)
                 {
                     _startTime = DateTime.Now;
                 }
             }
         }
+        
+        // 媒体真正开始播放时调用
+        public void OnMediaOpened()
+        {
+            // 如果正在录制且开始时间未设置，设置开始时间
+            if (_isRecording && _startTime == DateTime.MinValue)
+            {
+                _startTime = DateTime.Now;
+            }
+        }
 
         private bool CanPlayAudio()
         {
-            return !string.IsNullOrEmpty(CurrentAudioFile) && !IsPlaying;
+            return !string.IsNullOrEmpty(CurrentAudioFile) && !IsPlaying && _isRecording;
         }
 
         private void PauseAudio()
@@ -195,7 +205,7 @@ namespace BeatCfgMaker
 
         private bool CanPauseAudio()
         {
-            return !string.IsNullOrEmpty(CurrentAudioFile) && IsPlaying;
+            return !string.IsNullOrEmpty(CurrentAudioFile) && IsPlaying && _isRecording;
         }
 
         private void StartBeatConfig()
@@ -213,10 +223,11 @@ namespace BeatCfgMaker
             }
             
             _isRecording = true;
+            _startTime = DateTime.MinValue; // 开始时间将在播放时设置，确保与音乐同步
             CanInsertNewBeat = false; // 配置时无法插入新节奏
             StartRecording?.Invoke(this, EventArgs.Empty);
             
-            MessageBox.Show("开始节奏配置，播放音乐后按空格键记录时间点", "开始配置", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("开始节奏配置，现在可以播放音乐并按空格键记录时间点", "开始配置", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private bool CanStartBeatConfig()
@@ -226,6 +237,12 @@ namespace BeatCfgMaker
 
         private void InsertNewBeat()
         {
+            // 如果当前正在录制，先停止录制
+            if (_isRecording)
+            {
+                StopBeatRecording();
+            }
+            
             // 创建新的节奏记录
             var newRecord = new BeatRecord
             {
@@ -236,11 +253,8 @@ namespace BeatCfgMaker
             
             BeatRecords.Add(newRecord);
             
-            // 如果当前没有在配置，则设置新插入的节奏为当前配置节奏
-            if (!_isRecording)
-            {
-                _currentRecord = newRecord;
-            }
+            // 设置新插入的节奏为当前配置节奏
+            _currentRecord = newRecord;
             
             MessageBox.Show($"已插入新节奏：{RecordInfo}，循环次数：{CycleCount}", "插入成功", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -248,6 +262,87 @@ namespace BeatCfgMaker
         private bool CanInsertNewBeatFunc()
         {
             return CanInsertNewBeat && !string.IsNullOrEmpty(RecordInfo) && CycleCount > 0;
+        }
+
+        /// <summary>
+        /// 对所有节奏记录的时间戳进行跨节奏型对齐格式化。
+        /// 若不同节奏型中存在差值在容差范围内的时间节点，则统一替换为它们的平均值。
+        /// </summary>
+        /// <param name="toleranceMs">对齐容差（毫秒），默认200ms</param>
+        private void AlignTimestamps(double toleranceMs = 200.0)
+        {
+            // 收集所有时间戳（毫秒），并记录来源
+            var allTimestamps = new System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>();
+            for (int i = 0; i < BeatRecords.Count; i++)
+            {
+                var record = BeatRecords[i];
+                if (record.Timestamps == null) continue;
+                for (int j = 0; j < record.Timestamps.Count; j++)
+                {
+                    allTimestamps.Add((i, j, record.Timestamps[j].TotalMilliseconds));
+                }
+            }
+
+            // 按时间排序，对相近的时间节点进行分组并取平均
+            allTimestamps.Sort((a, b) => a.Ms.CompareTo(b.Ms));
+
+            // 分组：将差值在容差内的连续时间点归为同一组
+            var groups = new System.Collections.Generic.List<System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>>();
+            foreach (var ts in allTimestamps)
+            {
+                bool added = false;
+                foreach (var group in groups)
+                {
+                    // 与组内最大值比较（已排序，最后一个最大）
+                    if (Math.Abs(ts.Ms - group[group.Count - 1].Ms) <= toleranceMs)
+                    {
+                        group.Add(ts);
+                        added = true;
+                        break;
+                    }
+                }
+                if (!added)
+                {
+                    groups.Add(new System.Collections.Generic.List<(int, int, double)> { ts });
+                }
+            }
+
+            // 对每个分组，若包含来自不同节奏型的时间点，则统一为平均值
+            int alignedCount = 0;
+            foreach (var group in groups)
+            {
+                if (group.Count <= 1) continue;
+
+                // 检查是否来自不同节奏型
+                bool hasMultipleSources = false;
+                int firstRecordIndex = group[0].RecordIndex;
+                foreach (var item in group)
+                {
+                    if (item.RecordIndex != firstRecordIndex)
+                    {
+                        hasMultipleSources = true;
+                        break;
+                    }
+                }
+                if (!hasMultipleSources) continue;
+
+                // 计算平均值并更新
+                double avgMs = 0;
+                foreach (var item in group) avgMs += item.Ms;
+                avgMs /= group.Count;
+                double roundedMs = Math.Round(avgMs);
+
+                foreach (var item in group)
+                {
+                    BeatRecords[item.RecordIndex].Timestamps[item.TimestampIndex] = TimeSpan.FromMilliseconds(roundedMs);
+                }
+                alignedCount++;
+            }
+
+            if (alignedCount > 0)
+            {
+                MessageBox.Show($"已对齐 {alignedCount} 个跨节奏型的时间节点（容差：±{toleranceMs}ms）", "时间对齐", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
 
         private void SaveBeatRecords()
@@ -263,6 +358,9 @@ namespace BeatCfgMaker
             {
                 try
                 {
+                    // 保存前先对跨节奏型的时间节点进行对齐格式化
+                    AlignTimestamps();
+
                     using (var writer = new StreamWriter(saveFileDialog.FileName))
                     {
                         // 开始大数组格式
@@ -277,7 +375,7 @@ namespace BeatCfgMaker
                             {
                                 foreach (var timestamp in record.Timestamps)
                                 {
-                                    writer.Write($"{{{timestamp.TotalMilliseconds}}}");
+                                    writer.Write($"{{{Math.Round(timestamp.TotalMilliseconds)}}}");
                                 }
                             }
                             
@@ -339,6 +437,9 @@ namespace BeatCfgMaker
                     
                     // 将当前记录设为null，下次按键时创建新记录
                     _currentRecord = null;
+                    
+                    // 循环完成后重新启用插入新节奏功能
+                    CanInsertNewBeat = true;
                 }
             }
         }
@@ -348,6 +449,7 @@ namespace BeatCfgMaker
         {
             _isRecording = false;
             _currentRecord = null;
+            _startTime = DateTime.MinValue; // 重置开始时间
             CanInsertNewBeat = true; // 停止录制后可以插入新节奏
             StopRecording?.Invoke(this, EventArgs.Empty);
         }
