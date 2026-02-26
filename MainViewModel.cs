@@ -333,12 +333,25 @@ namespace BeatCfgMaker
                 bool added = false;
                 foreach (var group in groups)
                 {
-                    // 与组内最大值比较（已排序，最后一个最大），差值 < 容差则归入同组
+                    // 与组内最大值比较（已排序，最后一个最大），差值 < 容差才考虑归入同组
                     if (ts.Ms - group[group.Count - 1].Ms < toleranceMs)
                     {
-                        group.Add(ts);
-                        added = true;
-                        break;
+                        // 关键：同一节奏型的时间点不能归入同一组，防止同节奏内部被错误对齐
+                        bool alreadyHasSameRecord = false;
+                        foreach (var item in group)
+                        {
+                            if (item.RecordIndex == ts.RecordIndex)
+                            {
+                                alreadyHasSameRecord = true;
+                                break;
+                            }
+                        }
+                        if (!alreadyHasSameRecord)
+                        {
+                            group.Add(ts);
+                            added = true;
+                            break;
+                        }
                     }
                 }
                 if (!added)
