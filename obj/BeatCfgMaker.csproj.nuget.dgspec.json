@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\WindowLearning\\BeatCfgMaker\\BeatCfgMaker.csproj": {}
+    "D:\\Leraning\\RhythmDoctorLike\\Assets\\BeatCfgMaker~\\BeatCfgMaker.csproj": {}
   },
   "projects": {
-    "D:\\WindowLearning\\BeatCfgMaker\\BeatCfgMaker.csproj": {
+    "D:\\Leraning\\RhythmDoctorLike\\Assets\\BeatCfgMaker~\\BeatCfgMaker.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\WindowLearning\\BeatCfgMaker\\BeatCfgMaker.csproj",
+        "projectUniqueName": "D:\\Leraning\\RhythmDoctorLike\\Assets\\BeatCfgMaker~\\BeatCfgMaker.csproj",
         "projectName": "BeatCfgMaker",
-        "projectPath": "D:\\WindowLearning\\BeatCfgMaker\\BeatCfgMaker.csproj",
+        "projectPath": "D:\\Leraning\\RhythmDoctorLike\\Assets\\BeatCfgMaker~\\BeatCfgMaker.csproj",
         "packagesPath": "C:\\Users\\aubynyao\\.nuget\\packages\\",
-        "outputPath": "D:\\WindowLearning\\BeatCfgMaker\\obj\\",
+        "outputPath": "D:\\Leraning\\RhythmDoctorLike\\Assets\\BeatCfgMaker~\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

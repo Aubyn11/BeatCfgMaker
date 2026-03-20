@@ -102,6 +102,12 @@ namespace BeatCfgMaker
             }), System.Windows.Threading.DispatcherPriority.Background);
         }
         
+        private void SaveButton_Click(object sender, RoutedEventArgs e)
+        {
+            var viewModel = (MainViewModel)DataContext;
+            viewModel.SaveBeatRecordsPublic();
+        }
+
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
             // 处理空格键按下事件

@@ -159,8 +159,20 @@ namespace BeatCfgMaker
                 SelectedFiles.Add(openFileDialog.FileName);
                 CurrentAudioFile = openFileDialog.FileName;
                 IsPlaying = false;
-                
-                MessageBox.Show($"已选择文件：\\n{openFileDialog.FileName}", "文件选择成功", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // 重置所有录制状态，确保可以重新录制新歌曲
+                _isRecording = false;
+                _currentRecord = null;
+                _startTime = DateTime.MinValue;
+                CanInsertNewBeat = true;
+                BeatRecords.Clear();
+                CycleCount = 4;
+                RecordInfo = "节奏记录";
+
+                // 通知 View 停止录制（如有需要）
+                StopRecording?.Invoke(this, EventArgs.Empty);
+
+                MessageBox.Show($"已选择文件：\n{openFileDialog.FileName}", "文件选择成功", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
@@ -296,7 +308,12 @@ namespace BeatCfgMaker
         /// </summary>
         private void AlignTimestamps()
         {
-            if (BeatRecords == null || BeatRecords.Count < 2) return;
+            if (BeatRecords == null) return;
+            // 只统计有实际时间戳数据的节奏型，空记录不参与对齐判断
+            int validCount = 0;
+            foreach (var r in BeatRecords)
+                if (r.Timestamps != null && r.Timestamps.Count > 0) validCount++;
+            if (validCount < 2) return;
 
             // 1. 计算每个节奏型的最短间隔，取全局最小值作为容差
             double globalMinInterval = double.MaxValue;
@@ -313,6 +330,7 @@ namespace BeatCfgMaker
             double toleranceMs = globalMinInterval;
 
             // 2. 收集所有时间戳（毫秒），并记录来源
+            // 所有节点都参与对齐，但同一序列内的节点不会被归入同一组（由步骤3的alreadyHasSameRecord保证）
             var allTimestamps = new System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>();
             for (int i = 0; i < BeatRecords.Count; i++)
             {
@@ -326,6 +344,15 @@ namespace BeatCfgMaker
 
             // 3. 按时间排序，对相近的时间节点进行分组
             allTimestamps.Sort((a, b) => a.Ms.CompareTo(b.Ms));
+
+            // 预先记录每个节奏型的最后一个时间点索引，用于判断首尾衔接
+            var lastIndexOfRecord = new System.Collections.Generic.Dictionary<int, int>();
+            for (int i = 0; i < BeatRecords.Count; i++)
+            {
+                var r = BeatRecords[i];
+                if (r.Timestamps != null && r.Timestamps.Count > 0)
+                    lastIndexOfRecord[i] = r.Timestamps.Count - 1;
+            }
 
             var groups = new System.Collections.Generic.List<System.Collections.Generic.List<(int RecordIndex, int TimestampIndex, double Ms)>>();
             foreach (var ts in allTimestamps)
@@ -348,9 +375,29 @@ namespace BeatCfgMaker
                         }
                         if (!alreadyHasSameRecord)
                         {
-                            group.Add(ts);
-                            added = true;
-                            break;
+                            // 额外检查：跳过"首尾衔接"情况
+                            // 若当前 ts 是其序列的第一个时间点（index==0），
+                            // 且组内存在某元素是其序列的最后一个时间点，
+                            // 则无论差值多少，都认为是相邻序列首尾衔接，不对齐
+                            bool isSeamJoint = false;
+                            if (ts.TimestampIndex == 0)
+                            {
+                                foreach (var item in group)
+                                {
+                                    if (lastIndexOfRecord.TryGetValue(item.RecordIndex, out int lastIdx)
+                                        && item.TimestampIndex == lastIdx)
+                                    {
+                                        isSeamJoint = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!isSeamJoint)
+                            {
+                                group.Add(ts);
+                                added = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -361,6 +408,7 @@ namespace BeatCfgMaker
             }
 
             // 4. 对每个分组，若包含来自不同节奏型的时间点，则统一为平均值
+            // 注意：同一序列内的节点不参与平均值计算，只有跨序列的节点才互相对齐
             int alignedCount = 0;
             foreach (var group in groups)
             {
@@ -377,17 +425,32 @@ namespace BeatCfgMaker
                         break;
                     }
                 }
+                // 同一序列内的节点不做跨序列对齐
                 if (!hasMultipleSources) continue;
 
-                // 计算平均值并更新
+                // 只用来自不同序列的节点计算平均值（每个序列只取第一个出现的节点参与平均）
+                var seenRecords = new System.Collections.Generic.HashSet<int>();
                 double avgMs = 0;
-                foreach (var item in group) avgMs += item.Ms;
-                avgMs /= group.Count;
-                double roundedMs = Math.Round(avgMs);
-
+                int avgValidCount = 0;
                 foreach (var item in group)
                 {
-                    BeatRecords[item.RecordIndex].Timestamps[item.TimestampIndex] = TimeSpan.FromMilliseconds(roundedMs);
+                    if (seenRecords.Add(item.RecordIndex))
+                    {
+                        avgMs += item.Ms;
+                        avgValidCount++;
+                    }
+                }
+                avgMs /= avgValidCount;
+                double roundedMs = Math.Round(avgMs);
+
+                // 只更新来自不同序列的节点（每个序列只更新第一个出现的节点）
+                seenRecords.Clear();
+                foreach (var item in group)
+                {
+                    if (seenRecords.Add(item.RecordIndex))
+                    {
+                        BeatRecords[item.RecordIndex].Timestamps[item.TimestampIndex] = TimeSpan.FromMilliseconds(roundedMs);
+                    }
                 }
                 alignedCount++;
             }
@@ -398,65 +461,99 @@ namespace BeatCfgMaker
             }
         }
 
+        public void SaveBeatRecordsPublic()
+        {
+            SaveBeatRecords();
+        }
+
         private void SaveBeatRecords()
         {
-            var saveFileDialog = new SaveFileDialog
+            try
             {
-                Filter = "节奏配置文件 (*.beatcfg)|*.beatcfg|文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
-                Title = "保存节奏配置",
-                DefaultExt = ".beatcfg"
-            };
+                // 保存前先对跨节奏型的时间节点进行对齐格式化
+                AlignTimestamps();
 
-            if (saveFileDialog.ShowDialog() == true)
-            {
-                try
+                // 目标目录：Assets/StreamingAssets/Cfg/BeatCfg
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                string targetDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", "..", "StreamingAssets", "Cfg", "BeatCfg"));
+
+                // 若目录不存在则自动创建
+                if (!Directory.Exists(targetDir))
+                    Directory.CreateDirectory(targetDir);
+
+                // 文件名取导入的歌曲名（不含扩展名）
+                string fileName = Path.GetFileNameWithoutExtension(CurrentAudioFile);
+
+                // 去除文件名中的非法字符
+                foreach (char c in Path.GetInvalidFileNameChars())
+                    fileName = fileName.Replace(c.ToString(), "");
+
+                string filePath = Path.Combine(targetDir, fileName + ".beatcfg");
+
+                // 构建文件内容字符串
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("beatRecords = {");
+
+                foreach (var record in BeatRecords)
                 {
-                    // 保存前先对跨节奏型的时间节点进行对齐格式化
-                    AlignTimestamps();
+                    // 格式：beat{key = 循环次数,value = {时间点1}{时间点2}{...}}
+                    sb.Append($"    beat{{key = {record.CycleCount}, value = {{");
 
-                    using (var writer = new StreamWriter(saveFileDialog.FileName))
+                    if (record.Timestamps != null && record.Timestamps.Count > 0)
                     {
-                        // 开始大数组格式
-                        writer.WriteLine("beatRecords = {");
-                        
-                        foreach (var record in BeatRecords)
+                        foreach (var timestamp in record.Timestamps)
                         {
-                            // 格式：beat{key = 循环次数,value = {时间点1}{时间点2}{...}}
-                            writer.Write($"    beat{{key = {record.CycleCount}, value = {{");
-                            
-                            if (record.Timestamps != null && record.Timestamps.Count > 0)
-                            {
-                                foreach (var timestamp in record.Timestamps)
-                                {
-                                    writer.Write($"{{{Math.Round(timestamp.TotalMilliseconds)}}}");
-                                }
-                            }
-                            
-                            writer.Write("}}");
-                            
-                            // 如果不是最后一个记录，添加逗号分隔
-                            if (record != BeatRecords[BeatRecords.Count - 1])
-                            {
-                                writer.Write(",");
-                            }
-                            writer.WriteLine();
+                            sb.Append($"{{{Math.Round(timestamp.TotalMilliseconds)}}}");
                         }
-                        
-                        writer.WriteLine("}");
                     }
-                    
-                    MessageBox.Show($"节奏配置已保存到：{saveFileDialog.FileName}", "保存成功", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    sb.Append("}}");
+
+                    // 如果不是最后一个记录，添加逗号分隔
+                    if (record != BeatRecords[BeatRecords.Count - 1])
+                    {
+                        sb.Append(",");
+                    }
+                    sb.AppendLine();
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"保存文件时出错：{ex.Message}", "保存失败", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+
+                sb.AppendLine("}");
+
+                // XOR 0x5A 加密后写入
+                byte[] plainBytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+                byte[] encryptedBytes = new byte[plainBytes.Length];
+                for (int i = 0; i < plainBytes.Length; i++)
+                    encryptedBytes[i] = (byte)(plainBytes[i] ^ 0x5A);
+                File.WriteAllBytes(filePath, encryptedBytes);
+
+                // 将音乐文件复制到 StreamingAssets/Cfg/MusicCfg
+                string musicDir = Path.GetFullPath(Path.Combine(appDir, "..", "..", "..", "..", "Resources", "Music", "CustomMusic"));
+                if (!Directory.Exists(musicDir))
+                    Directory.CreateDirectory(musicDir);
+
+                string musicFileName = Path.GetFileName(CurrentAudioFile);
+                string musicDestPath = Path.Combine(musicDir, musicFileName);
+                File.Copy(CurrentAudioFile, musicDestPath, overwrite: true);
+
+                MessageBox.Show("保存成功", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存文件时出错：{ex.Message}", "保存失败", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private bool CanSaveBeatRecords()
         {
-            return BeatRecords != null && BeatRecords.Count > 0;
+            if (string.IsNullOrEmpty(CurrentAudioFile)) return false;
+            if (BeatRecords == null || BeatRecords.Count == 0) return false;
+            // 至少有一条节奏型录入了时间点，才视为已配置
+            foreach (var record in BeatRecords)
+            {
+                if (record.Timestamps != null && record.Timestamps.Count > 0)
+                    return true;
+            }
+            return false;
         }
 
         // 空格键按下事件处理
@@ -464,6 +561,8 @@ namespace BeatCfgMaker
         {
             if (_isRecording && IsPlaying)
             {
+                var currentTime = DateTime.Now - _startTime;
+
                 // 如果当前记录为空，创建新的节奏记录
                 if (_currentRecord == null)
                 {
@@ -475,22 +574,21 @@ namespace BeatCfgMaker
                     };
                     BeatRecords.Add(_currentRecord);
                 }
-                
-                var currentTime = DateTime.Now - _startTime;
+
                 _currentRecord.Timestamps.Add(currentTime);
-                
-                // 如果达到循环次数，标记当前记录完成，下次按键时创建新记录
+
+                // 如果达到循环次数，标记当前记录完成，下次按键时再创建新记录
                 if (_currentRecord.Timestamps.Count >= _currentRecord.CycleCount)
                 {
                     // 在当前记录信息中添加完成标记
                     if (!_currentRecord.RecordInfo.Contains("（循环完成）"))
                     {
-                        _currentRecord.RecordInfo += "（循环完成）\\n";
+                        _currentRecord.RecordInfo += "（循环完成）";
                     }
-                    
-                    // 将当前记录设为null，下次按键时创建新记录
+
+                    // 将当前记录设为null，下次按键时才创建新记录
                     _currentRecord = null;
-                    
+
                     // 循环完成后重新启用插入新节奏功能
                     CanInsertNewBeat = true;
                 }

@@ -22,7 +22,7 @@
         
         <StackPanel HorizontalAlignment="Left" Orientation="Horizontal">
             <Button Height="30" Width="100" Content="选择文件" Command="{Binding SelectFileCommand}"></Button>
-            <Button Height="30" Width="100" Content="保存文件" Margin="10,0,0,0" Command="{Binding SaveFileCommand}"></Button>
+            <Button Height="30" Width="100" Content="保存文件" Margin="10,0,0,0" Click="SaveButton_Click"></Button>
         </StackPanel>
         
         <StackPanel Grid.Row="1" Margin="10">

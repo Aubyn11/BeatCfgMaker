@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BeatCfgMaker")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4f16bb925ea5a22e7161785673865cb12ac9b161")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+81887ab94841456afbbe164956d0372519cccf7a")]
 [assembly: System.Reflection.AssemblyProductAttribute("BeatCfgMaker")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BeatCfgMaker")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

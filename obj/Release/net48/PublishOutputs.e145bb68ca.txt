@@ -1,0 +1,3 @@
+D:\Leraning\RhythmDoctorLike\Assets\BeatCfgMaker~\bin\Release\net48\publish\BeatCfgMaker.exe
+D:\Leraning\RhythmDoctorLike\Assets\BeatCfgMaker~\bin\Release\net48\publish\BeatCfgMaker.exe.config
+D:\Leraning\RhythmDoctorLike\Assets\BeatCfgMaker~\bin\Release\net48\publish\BeatCfgMaker.pdb
